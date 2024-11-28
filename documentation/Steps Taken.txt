@@ -1,0 +1,5 @@
+-setup environment with glfw and glad
+-created window
+-added glm (graphics library mathematics)
+
+-setup camera
