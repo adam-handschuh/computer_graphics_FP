@@ -8,17 +8,20 @@ set(CMAKE_CXX_STANDARD 20)
 add_executable(Final
         src/config.h
         src/scene.cpp
-        src/glad.c)
+        src/glad.c
+        src/shaders/shader.cpp)
 
 target_include_directories(Final
         PRIVATE external/glad/include
         PRIVATE external/glfw-3.4/include
         PRIVATE external/glm
-        PRIVATE external)
+        PRIVATE external
+        PRIVATE src)
 
 target_link_directories(Final
         PRIVATE external/glfw-3.4/lib-mingw-w64
-        PRIVATE external/glm)
+        PRIVATE external/glm
+        PRIVATE src/shaders)
 
 target_link_libraries(Final
         glfw3

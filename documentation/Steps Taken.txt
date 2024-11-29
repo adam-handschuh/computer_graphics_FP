@@ -3,3 +3,4 @@
 -added glm (graphics library mathematics)
 
 -setup camera
+-added flat water plane

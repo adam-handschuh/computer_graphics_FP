@@ -52,16 +52,23 @@ build cmake_object_order_depends_target_Final: phony || .
 build CMakeFiles/Final.dir/src/scene.cpp.obj: CXX_COMPILER__Final_unscanned_Debug C$:/Users/Adam/Desktop/College/Trinity/Year_4/Computer$ Graphics/final_project/src/scene.cpp || cmake_object_order_depends_target_Final
   DEP_FILE = CMakeFiles\Final.dir\src\scene.cpp.obj.d
   FLAGS = -g -std=gnu++20 -fdiagnostics-color=always
-  INCLUDES = -I"C:/Users/Adam/Desktop/College/Trinity/Year_4/Computer Graphics/final_project/external/glad/include" -I"C:/Users/Adam/Desktop/College/Trinity/Year_4/Computer Graphics/final_project/external/glfw-3.4/include" -I"C:/Users/Adam/Desktop/College/Trinity/Year_4/Computer Graphics/final_project/external/glm" -I"C:/Users/Adam/Desktop/College/Trinity/Year_4/Computer Graphics/final_project/external"
+  INCLUDES = -I"C:/Users/Adam/Desktop/College/Trinity/Year_4/Computer Graphics/final_project/external/glad/include" -I"C:/Users/Adam/Desktop/College/Trinity/Year_4/Computer Graphics/final_project/external/glfw-3.4/include" -I"C:/Users/Adam/Desktop/College/Trinity/Year_4/Computer Graphics/final_project/external/glm" -I"C:/Users/Adam/Desktop/College/Trinity/Year_4/Computer Graphics/final_project/external" -I"C:/Users/Adam/Desktop/College/Trinity/Year_4/Computer Graphics/final_project/src"
   OBJECT_DIR = CMakeFiles\Final.dir
   OBJECT_FILE_DIR = CMakeFiles\Final.dir\src
 
 build CMakeFiles/Final.dir/src/glad.c.obj: C_COMPILER__Final_unscanned_Debug C$:/Users/Adam/Desktop/College/Trinity/Year_4/Computer$ Graphics/final_project/src/glad.c || cmake_object_order_depends_target_Final
   DEP_FILE = CMakeFiles\Final.dir\src\glad.c.obj.d
   FLAGS = -g -fdiagnostics-color=always
-  INCLUDES = -I"C:/Users/Adam/Desktop/College/Trinity/Year_4/Computer Graphics/final_project/external/glad/include" -I"C:/Users/Adam/Desktop/College/Trinity/Year_4/Computer Graphics/final_project/external/glfw-3.4/include" -I"C:/Users/Adam/Desktop/College/Trinity/Year_4/Computer Graphics/final_project/external/glm" -I"C:/Users/Adam/Desktop/College/Trinity/Year_4/Computer Graphics/final_project/external"
+  INCLUDES = -I"C:/Users/Adam/Desktop/College/Trinity/Year_4/Computer Graphics/final_project/external/glad/include" -I"C:/Users/Adam/Desktop/College/Trinity/Year_4/Computer Graphics/final_project/external/glfw-3.4/include" -I"C:/Users/Adam/Desktop/College/Trinity/Year_4/Computer Graphics/final_project/external/glm" -I"C:/Users/Adam/Desktop/College/Trinity/Year_4/Computer Graphics/final_project/external" -I"C:/Users/Adam/Desktop/College/Trinity/Year_4/Computer Graphics/final_project/src"
   OBJECT_DIR = CMakeFiles\Final.dir
   OBJECT_FILE_DIR = CMakeFiles\Final.dir\src
+
+build CMakeFiles/Final.dir/src/shaders/shader.cpp.obj: CXX_COMPILER__Final_unscanned_Debug C$:/Users/Adam/Desktop/College/Trinity/Year_4/Computer$ Graphics/final_project/src/shaders/shader.cpp || cmake_object_order_depends_target_Final
+  DEP_FILE = CMakeFiles\Final.dir\src\shaders\shader.cpp.obj.d
+  FLAGS = -g -std=gnu++20 -fdiagnostics-color=always
+  INCLUDES = -I"C:/Users/Adam/Desktop/College/Trinity/Year_4/Computer Graphics/final_project/external/glad/include" -I"C:/Users/Adam/Desktop/College/Trinity/Year_4/Computer Graphics/final_project/external/glfw-3.4/include" -I"C:/Users/Adam/Desktop/College/Trinity/Year_4/Computer Graphics/final_project/external/glm" -I"C:/Users/Adam/Desktop/College/Trinity/Year_4/Computer Graphics/final_project/external" -I"C:/Users/Adam/Desktop/College/Trinity/Year_4/Computer Graphics/final_project/src"
+  OBJECT_DIR = CMakeFiles\Final.dir
+  OBJECT_FILE_DIR = CMakeFiles\Final.dir\src\shaders
 
 
 # =============================================================================
@@ -71,10 +78,10 @@ build CMakeFiles/Final.dir/src/glad.c.obj: C_COMPILER__Final_unscanned_Debug C$:
 #############################################
 # Link the executable Final.exe
 
-build Final.exe: CXX_EXECUTABLE_LINKER__Final_Debug CMakeFiles/Final.dir/src/scene.cpp.obj CMakeFiles/Final.dir/src/glad.c.obj
+build Final.exe: CXX_EXECUTABLE_LINKER__Final_Debug CMakeFiles/Final.dir/src/scene.cpp.obj CMakeFiles/Final.dir/src/glad.c.obj CMakeFiles/Final.dir/src/shaders/shader.cpp.obj
   FLAGS = -g
   LINK_LIBRARIES = -lglfw3  -lopengl32  -lglu32  -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
-  LINK_PATH = -LC:/Users/Adam/Desktop/College/Trinity/Year_4/COMPUT~1/FINAL_~1/external/glfw-3.4/LIB-MI~1   -LC:/Users/Adam/Desktop/College/Trinity/Year_4/COMPUT~1/FINAL_~1/external/glm
+  LINK_PATH = -LC:/Users/Adam/Desktop/College/Trinity/Year_4/COMPUT~1/FINAL_~1/external/glfw-3.4/LIB-MI~1   -LC:/Users/Adam/Desktop/College/Trinity/Year_4/COMPUT~1/FINAL_~1/external/glm   -LC:/Users/Adam/Desktop/College/Trinity/Year_4/COMPUT~1/FINAL_~1/src/shaders
   OBJECT_DIR = CMakeFiles\Final.dir
   POST_BUILD = cd .
   PRE_LINK = cd .
