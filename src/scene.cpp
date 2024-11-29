@@ -5,9 +5,17 @@ static int windowWidth = 1366;
 static int windowHeight = 768;
 static GLFWwindow *window;   //Create window
 static void key_callback(GLFWwindow *window, int key, int scanCode, int action, int mode);
+double mouseX, mouseY;
 
 //camera
-glm::vec3 camera_pos = glm::vec3(300.0f, 300.0f, 300.0f);
+float cX = 300.0f;
+float cY = 300.0f;
+float cZ = 300.0f;   //camera positions
+
+float camera_aimX;
+float camera_aimY;
+
+glm::vec3 camera_pos = glm::vec3(cX, cY, cZ);
 glm::vec3 camera_up = glm::vec3(0.0f, 1.0f, 0.0f);
 glm::vec3 camera_lookAt(0.0f, 0.0f, 0.0f);
 static float camera_fov = 90.0f;
@@ -17,15 +25,15 @@ static float camera_far = 1000.0f;
 //STRUCTS
 struct Scene{
   GLfloat vertexBufferData[12]{
-      // Bottom face
-      -1.0f, -1.0f, -1.0f,
-      1.0f, -1.0f, -1.0f,
-      1.0f, -1.0f, 1.0f,
-      -1.0f, -1.0f, 1.0f,
+      // Water surface
+      -1.0f, 1.0f, -1.0f,
+      1.0f, 1.0f, -1.0f,
+      1.0f, 1.0f, 1.0f,
+      -1.0f, 1.0f, 1.0f,
   };
 
   GLfloat colorBufferData[12]{
-      // Top, blue
+      // Light-Blue
       0.5f, 0.5f, 1.0f,
       0.5f, 0.5f, 1.0f,
       0.5f, 0.5f, 1.0f,
@@ -105,8 +113,6 @@ struct Scene{
     glm::mat4 mvp = cameraMatrix * modelMatrix;
     glUniformMatrix4fv(mvpMatrixID, 1, GL_FALSE, &mvp[0][0]);
 
-    std::cout << "HELLO WORLD" << std::endl;
-
     glDrawElements(
         GL_TRIANGLES,                 // mode
         sizeof(indexBufferData),      // number of indices
@@ -125,6 +131,12 @@ struct Scene{
     glDeleteProgram(programID);
   }
 };
+
+
+//FUNCTIONS
+void updateMouse(){
+  glfwGetCursorPos(window, &mouseX, &mouseY);
+}
 
 //MAIN LOOP
 int main(){
@@ -168,7 +180,15 @@ int main(){
   do{
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+    //mouseStuff
+    updateMouse();
+    std::cout <<  mouseX << " " << mouseY << std::endl;
+    camera_aimX = mouseY;
+    camera_aimY = mouseX;
+
     //Render Camera-View
+    camera_lookAt = glm::vec3(0,0,0);
+    camera_pos = glm::vec3(cX,cY,cZ);
     viewMatrix = glm::lookAt(camera_pos, camera_lookAt, camera_up);
     glm::mat4 vp =  projectionMatrix * viewMatrix;
 
@@ -186,7 +206,16 @@ int main(){
 }
 
 void key_callback(GLFWwindow *window, int key, int scancode, int action, int mode) {
-  if (key == GLFW_KEY_R && action == GLFW_PRESS) {
-    std::cout << "PRESSED R KEY" << std::endl;
+  if (key == GLFW_KEY_W) {
+    cX -= 5;
+  }
+  if (key == GLFW_KEY_S) {
+    cX += 5;
+  }
+  if (key == GLFW_KEY_A) {
+    cZ -= 5;
+  }
+  if (key == GLFW_KEY_D) {
+    cZ += 5;
   }
 }

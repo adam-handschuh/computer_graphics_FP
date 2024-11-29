@@ -5,3 +5,4 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <shaders/shader.h>
+#include <tinygltf/tiny_gltf.h>

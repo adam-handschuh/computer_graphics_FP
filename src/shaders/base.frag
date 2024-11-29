@@ -1,8 +1,8 @@
 #version 330 core
 
-in vec3 fragmentColor;
+in vec4 fragmentColor;
 
-out vec3 finalColor;
+out vec4 finalColor;
 
 void main(){
     finalColor = fragmentColor;
