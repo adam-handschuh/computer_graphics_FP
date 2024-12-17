@@ -15,8 +15,9 @@ target_include_directories(Final
         PRIVATE external/glad/include
         PRIVATE external/glfw-3.4/include
         PRIVATE external/glm
-        PRIVATE external/tinygltf
+        PRIVATE external/stb
         PRIVATE external
+        PRIVATE models
         PRIVATE src)
 
 target_link_directories(Final
