@@ -10,18 +10,27 @@ double mouseX, mouseY;
 
 // camera
 float cX = 0.0f;
-float cY = 0.0f;
+float cY = 300.0f;
 float cZ = 0.0f; // camera positions
 float camera_aimX = 0.0f;
 float camera_aimY = 0.0f;
-float camera_speed = 5.0f;
+float camera_speed = 50.0f;
 glm::vec3 forwardAim;
 glm::vec3 camera_pos = glm::vec3(cX, cY, cZ);
 glm::vec3 camera_up = glm::vec3(0.0f, 1.0f, 0.0f);
 glm::vec3 camera_lookAt(0.0f, 0.0f, 0.0f);
 static float camera_fov = 70.0f;
 static float camera_near = 0.1f;
-static float camera_far = 2000.0f;
+static float camera_far = 8000.0f;
+
+//Shadow Map
+static int shadowMapWidth = 0;
+static int shadowMapHeight = 0;
+GLuint fbo;
+GLuint depthTex;
+static float depthFoV = 100.0f;
+static float depthNear = 50.0f;
+static float depthFar = 2000.0f;
 
 // FUNCTIONS
 static void ProgramSetup() {
@@ -70,8 +79,7 @@ static GLuint LoadTextureTileBox(const char *texture_file_path) {
 
   return texture;
 }
-void key_callback(GLFWwindow *window, int key, int scancode, int action,
-                  int mode) {
+void key_callback(GLFWwindow *window, int key, int scancode, int action, int mode) {
   // Move
   if (key == GLFW_KEY_W) {
     cX += forwardAim.x * camera_speed;
@@ -475,7 +483,6 @@ struct Water {
     glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBufferID);
-    glEnableVertexAttribArray(2);
 
     // Set model-view-projection matrix
     glm::mat4 modelMatrix = glm::mat4(1.0f);
@@ -503,17 +510,300 @@ struct Water {
     glDeleteProgram(programID);
   }
 };
-struct SpotLight { /*TODO: make a light*/
+struct PointLight {
+  // Lighting control
+  const glm::vec3 wave500 = glm::vec3(0.0f, 255.0f, 146.0f);
+  const glm::vec3 wave600 = glm::vec3(255.0f, 190.0f, 0.0f);
+  const glm::vec3 wave700 = glm::vec3(205.0f, 0.0f, 0.0f);
+  glm::vec3 lightIntensity = 10.0f * (8.0f * wave500 + 15.6f * wave600 + 18.4f * wave700);
+  glm::vec3 lightPosition = glm::vec3(-275.0f, 500.0f, -275.0f);
+  glm::vec3 lightUp = glm::vec3(0, 0, 1);
+
+
+};
+struct Car {
+  int direction = 1;        // 1 - north | 2 - east | 3 - south | 4 - west
+  bool leftOrRight = false; // true - left | false - right
+  glm::vec3 position;
+  glm::vec3 scale;
+  int gridX, gridY;
+  bool readyForTurn = false;
+  bool turned = true;
+  float turningAngle = 0;
+  float turnAngle = 0;
+
+  std::vector<std::vector<float>> grid;
+
+  float distCount = 0;
+
+  float speed = 0.0;
+  Asset *carModel;
+
+  void initialise(glm::vec3 position, glm::vec3 scale, std::vector<std::vector<float>> grid) {
+    this->position = position;
+    this->scale = scale;
+    this->grid = grid;
+    try {
+      int randomX = (rand() % (grid.size() - 1));
+      int randomY = (rand() % (grid.size() - 1));
+
+      while (grid.at(randomX).at(randomY) != -1) {
+        randomX = (rand() % (grid.size() - 1));
+        randomY = (rand() % (grid.size() - 1));
+      }
+      gridX = randomX;
+      gridY = randomY;
+      std::cout << "X:" << gridX << "  Y:" << gridY << std::endl;
+
+      this->position.x = 0;
+      this->position.x -= grid.size() * ((2 * 20));
+      this->position.x += (gridX + 1) * (2 * 20);
+
+      this->position.z = 0;
+      this->position.z += 2 * 20;
+      this->position.z -= (gridY + 1) * (2 * 20);
+
+      this->position.y = 100.0f;
+
+      carModel = new Asset("temp_car");
+      carModel->initialise(position, scale);
+
+      if ((gridX == 0 || gridX == grid.size() - 1) &&
+          (gridY > 0 && gridY < grid.size() - 1)) {
+        direction = 2;
+      } else if ((gridY == 0 || gridY == grid.size() - 1) &&
+                 (gridX > 0 && gridX < grid.size() - 1)) {
+        direction = 1;
+      } else {
+        if (grid.at(gridX - 1).at(gridY) == -1 ||
+            grid.at(gridX + 1).at(gridY)) {
+          direction = 1;
+        } else if (grid.at(gridX).at(gridY - 1) == -1 ||
+                   grid.at(gridX).at(gridY + 1)) {
+          direction = 2;
+        }
+      }
+
+      if (direction == 1) {
+        turnAngle = 90;
+      } else {
+        turnAngle = 0;
+      }
+    }catch(std::errc e) {
+      std::cout << "Failed" << std::endl << std::endl;
+    }
+  }
+
+  void render(glm::mat4 cameraMatrix, glm::vec3 camPos) {
+    // speed adjustments
+
+    if(!turned){
+      if(leftOrRight){
+        if(turningAngle < 90){
+          turningAngle ++;
+          turnAngle ++;
+        }else{
+          turningAngle = 0;
+          turned = true;
+        }
+      }else{
+        if(turningAngle > -90){
+          turningAngle --;
+          turnAngle --;
+        }else{
+          turningAngle = 0;
+          turned = true;
+        }
+      }
+    }
+
+    // Decide turning direction
+    if(direction == 1) {
+      position.x -= speed;
+      if (distCount >= 2 * 20) {
+        readyForTurn = true;
+        distCount = 0;
+        gridX--;
+      }
+      if (shouldTurnHere()) {
+        readyForTurn = false;
+        turned = false;
+        direction = leftOrRight ? 4 : 2;
+      }
+    }else if(direction == 2) {
+      position.z -= speed;
+
+      if (distCount >= 2 * 20) {
+        readyForTurn = true;
+        distCount = 0;
+        gridY++;
+      }
+      if (shouldTurnHere()) {
+        readyForTurn = false;
+        turned = false;
+        direction = leftOrRight ? 1 : 3;
+      }
+    }else if(direction == 3) {
+      position.x += speed;
+
+      if (distCount >= 2 * 20) {
+        readyForTurn = true;
+        distCount = 0;
+        gridX++;
+      }
+      if (shouldTurnHere()) {
+        readyForTurn = false;
+        turned = false;
+        direction = leftOrRight ? 2 : 4;
+      }
+    }else if(direction == 4){
+      position.z += speed;
+
+      if (distCount >= 2 * 20) {
+        readyForTurn = true;
+        distCount = 0;
+        gridY--;
+      }
+      if (shouldTurnHere()) {
+        readyForTurn = false;
+        turned = false;
+        direction = leftOrRight ? 3 : 1;
+      }
+    }
+    carModel->rotate(glm::vec3(0.0f,1.0f,0.0f), turnAngle*M_PI/180);
+    carModel->render(cameraMatrix, camPos - position);
+    distCount += speed;
+  }
+
+  bool shouldTurnHere() {
+    if(readyForTurn){
+      int random = rand() % 100;
+      switch(direction){
+      case 1:
+        if(random > 75 && roadEast()){
+          leftOrRight = false;
+          return true;
+        }else if(random > 50 && roadWest()){
+          leftOrRight = true;
+          return true;
+        }else if(!roadNorth()){
+          if(roadEast()){
+            leftOrRight = false;
+            return true;
+          }
+          if(roadWest()){
+            leftOrRight = true;
+            return true;
+          }
+        }
+        break;
+      case 2:
+        if(random > 75 && roadSouth()){
+          leftOrRight = false;
+          return true;
+        }else if(random > 50 && roadNorth()){
+          leftOrRight = true;
+          return true;
+        }else if(!roadEast()){
+          if(roadSouth()){
+            leftOrRight = false;
+            return true;
+          }
+          if(roadNorth()){
+            leftOrRight = true;
+            return true;
+          }
+        }
+        break;
+      case 3:
+        if(random > 75 && roadEast()){
+          leftOrRight = true;
+          return true;
+        }else if(random > 50 && roadWest()){
+          leftOrRight = false;
+          return true;
+        }else if(!roadSouth()){
+          if(roadEast()){
+            leftOrRight = true;
+            return true;
+          }
+          if(roadWest()){
+            leftOrRight = false;
+            return true;
+          }
+        }
+        break;
+      case 4:
+        if(random > 75 && roadSouth()){
+          leftOrRight = true;
+          return true;
+        }else if(random > 50 && roadNorth()){
+          leftOrRight = false;
+          return true;
+        }else if(!roadWest()){
+          if(roadNorth()){
+            leftOrRight = false;
+            return true;
+          }
+          if(roadSouth()){
+            leftOrRight = true;
+            return true;
+          }
+        }
+        break;
+      }
+    }
+    return false;
+  }
+
+  bool roadNorth(){
+    if(gridX != 0) {
+      if (grid.at(gridX - 1).at(gridY) == -1) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool roadEast(){
+    if(gridY != grid.size()-1) {
+      if (grid.at(gridX).at(gridY + 1) == -1) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool roadSouth(){
+    if(gridX != grid.size()-1) {
+      if (grid.at(gridX + 1).at(gridY) == -1) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  bool roadWest(){
+    if(gridY != 0) {
+      if (grid.at(gridX).at(gridY - 1) == -1) {
+        return true;
+      }
+    }
+    return false;
+  }
+
 };
 
 struct Island {
   glm::vec3 islePos;
   int isleScaleFactor;
 
-  Asset* isleBase;
-  Asset* building;
-  Asset* building2;
-  std::vector<Asset> buildings;
+  Asset *isleBase;
+  Asset *building;
+  Asset *building2;
+  Asset *garden;
+  std::vector<Car> cars;
+  std::vector<PointLight> lights;
 
   GLuint programID;
   GLuint mvpMatrixID;
@@ -523,7 +813,8 @@ struct Island {
 
   std::vector<std::vector<float>> grid;
   const int baseSize = 10;
-  const int buildSpace = 5;
+  const int buildSpace = 2;
+  float gardenHoverAnim = 0;
 
   Island(glm::vec3 islePos, int isleScaleFactor) {
     this->islePos = islePos;
@@ -532,45 +823,57 @@ struct Island {
   };
 
   void createIsleGrid(int scaleFac) {
-    float random = (rand() % 100) /100;
-    //CREATE A (baseSize*scaleFac X baseSize*scaleFac) square matrix of 0-1s
-    for(int i = 0; i < baseSize*scaleFac; i ++){
-      std::vector<float> row;
-      for(int j = 0; j < baseSize*scaleFac; j ++) {
-        float random = (rand() % 100)/100.0f;
-        row.push_back(random);
-      }
-      grid.push_back(row);
-    }
-    //PLACE FLOATING GARDENS (2x2) - 2
-    for(int i = 0; i < scaleFac*2;){
-      //Generate a random position that is always at least 1 away from the edge
-      int randomX = (rand() % baseSize*scaleFac) + 1;
-      int randomY = (rand() % baseSize*scaleFac) + 1;
-      if(randomX > baseSize*scaleFac - 2) {
-        randomX -= (randomX - (baseSize*scaleFac-3));
-      }
-      if(randomY > baseSize*scaleFac - 2) {
-        randomY -= (randomY - (baseSize*scaleFac-3));
-      }
-      //Find a plot that will not intersect with another garden
-      if(grid.at(randomX).at(randomY) != 2.0f && grid.at(randomX+1).at(randomY) != 2.0f && grid.at(randomX).at(randomY+1) != 2.0f && grid.at(randomX).at(randomY) != 2.0f){
-        grid.at(randomX).at(randomY) = 2.0f;
-        grid.at(randomX+1).at(randomY) = 2.0f;
-        grid.at(randomX).at(randomY+1) = 2.0f;
-        grid.at(randomX+1).at(randomY+1) = 2.0f;
-        i++;
-      }
+    // CREATE AN OUTER LAYER OF -1s
+    std::vector<float> nullRow;
+    for (int i = 0; i < baseSize * scaleFac; i++) {
+      nullRow.push_back(-1);
+      nullRow.push_back(-1);
+      nullRow.push_back(-1);
     }
 
-    std::cout << std::endl << "Grid: " << std::endl;
-    for(int i = 0; i < baseSize*scaleFac; i ++){
-      for(int j = 0; j < baseSize*scaleFac; j ++){
-        std::cout << grid.at(i).at(j) << ", ";
+    // CREATE A (baseSize*scaleFac X baseSize*scaleFac) square matrix of 0-1s
+    for (int i = 0; i < baseSize * scaleFac; i++) {
+      grid.push_back(nullRow);
+      std::vector<float> row;
+      for (int j = 0; j < baseSize * scaleFac; j++) {
+        float random = (rand() % 100) / 100.0f;
+        row.push_back(-1);
+        row.push_back(random);
       }
-      std::cout << std::endl;
+      row.push_back(-1);
+      grid.push_back(row);
     }
-    std::cout << std::endl;
+    grid.push_back(nullRow);
+
+    // PLACE FLOATING GARDENS (2x2) - 2
+    for (int i = 0; i < scaleFac * 2;) {
+      // Generate a random position that is always at least 1 away from the edge
+      int randomX = (rand() % baseSize * scaleFac) + 1;
+      int randomY = (rand() % baseSize * scaleFac) + 1;
+      if (randomX > baseSize * scaleFac - 2) {
+        randomX -= (randomX - (baseSize * scaleFac - 3));
+      }
+      if (randomY > baseSize * scaleFac - 2) {
+        randomY -= (randomY - (baseSize * scaleFac - 3));
+      }
+      // Find a plot that will not intersect with another garden
+      if (grid.at(randomX).at(randomY) != 2.0f &&
+          grid.at(randomX + 1).at(randomY) != 2.0f &&
+          grid.at(randomX).at(randomY + 1) != 2.0f &&
+          grid.at(randomX).at(randomY) != 2.0f) {
+        if (grid.at(randomX).at(randomY) != 0.0f &&
+            grid.at(randomX + 1).at(randomY) != 0.0f &&
+            grid.at(randomX).at(randomY + 1) != 0.0f &&
+            grid.at(randomX).at(randomY) != 0.0f &&
+            grid.at(randomX).at(randomY) != -1) {
+          grid.at(randomX).at(randomY) = 2.0f;
+          grid.at(randomX + 1).at(randomY) = 0.0f;
+          grid.at(randomX).at(randomY + 1) = 0.0f;
+          grid.at(randomX + 1).at(randomY + 1) = 0.0f;
+          i++;
+        }
+      }
+    }
   }
 
   void initialise(glm::vec3 position, glm::vec3 scale) {
@@ -579,10 +882,22 @@ struct Island {
     isleBase = new Asset("isle_base");
     building = new Asset("temp_building");
     building2 = new Asset("temp_building2");
+    garden = new Asset("temp_garden");
+
+    for(int i = 0; i < baseSize*isleScaleFactor; i ++){
+      Car car;
+      car.initialise(this->position, glm::vec3(1.0f,1.0f,1.0f), grid);
+      cars.push_back(car);
+    }
 
     building->initialise(position, scale);
     building2->initialise(position, scale);
-    isleBase->initialise(position, glm::vec3(scale.x*(buildSpace/2)*isleScaleFactor*baseSize, scale.y, scale.z*(buildSpace/2)*isleScaleFactor*baseSize));
+    garden->initialise(position, scale);
+
+    isleBase->initialise(
+        position,
+        glm::vec3(scale.x * buildSpace * isleScaleFactor * baseSize, scale.y,
+                  scale.z * buildSpace * isleScaleFactor * baseSize));
 
     // Create and compile our GLSL program from the shaders
     programID = LoadShadersFromFile("../src/shaders/base.vert",
@@ -594,36 +909,69 @@ struct Island {
   }
 
   void render(glm::mat4 cameraMatrix, glm::vec3 cameraPos) {
+    gardenHoverAnim += 0.05f;
+    if (gardenHoverAnim >= 360.0f) {
+      gardenHoverAnim = 0.0f;
+    }
+
     glUseProgram(programID);
-    isleBase->render(cameraMatrix,cameraPos);
-    for(int i = 0; i < grid.size(); i ++){
-      for(int j = 0; j < grid.size(); j ++) {
-        glm::vec3 buildPos = glm::vec3(cameraPos.x + (i*buildSpace*scale.x), cameraPos.y, cameraPos.z + (j*buildSpace*scale.x));
-        if(grid.at(i).at(j) > 0.5){
-          building->render(cameraMatrix, buildPos);
-        }else{
-          building2->render(cameraMatrix, buildPos);
+    isleBase->render(cameraMatrix, cameraPos);
+    for (int i = 0; i < grid.size(); i++) {
+      for (int j = 0; j < grid.size(); j++) {
+        glm::vec3 buildPos;
+        if (grid.at(i).at(j) <= 1 && grid.at(i).at(j) > 0) {
+          buildPos =
+              glm::vec3(cameraPos.x + (i * (buildSpace)*scale.x), cameraPos.y,
+                        cameraPos.z + (j * (buildSpace)*scale.x));
+          if (grid.at(i).at(j) > 0.5) {
+            building->render(cameraMatrix, buildPos);
+          } else {
+            building2->render(cameraMatrix, buildPos);
+          }
+        } else if (grid.at(i).at(j) == 2) {
+          buildPos = glm::vec3(cameraPos.x + (i * (buildSpace)*scale.x),
+                               cameraPos.y +
+                                   (5 * (sin(gardenHoverAnim * M_PI / 180.0f))),
+                               cameraPos.z + (j * (buildSpace)*scale.x));
+          garden->render(cameraMatrix, buildPos);
         }
       }
     }
+    for (int i = 0; i < cars.size(); i++) {
+      cars.at(i).render(cameraMatrix, cameraPos);
+    }
   }
 
+  void cleanup() {
+    isleBase->cleanup();
+    building->cleanup();
+    building2->cleanup();
+    for (Car car : cars) {
+      car.carModel->cleanup();
+    }
+  }
 };
 
 // MAIN LOOP
 int main() {
   ProgramSetup();
   // Object initialisation
+  std::vector<PointLight> pLights;
+
+  PointLight moon;
+
+  pLights.push_back(moon);
+
   Water water;
   water.initialise(glm::vec3(0.0f, -50.0f, 0.0f),
-                   glm::vec3(1000.0f, 1.0f, 1000.0f));
+                   glm::vec3(5000.0f, 1.0f, 5000.0f));
   SkyBox skyBox;
   skyBox.initialise(glm::vec3(0.0f, 0.0f, 0.0f),
-                    glm::vec3(1000.0f, 1000.0f, 1000.0f));
+                    glm::vec3(5000.0f, 5000.0f, 5000.0f));
 
-  Island isle(glm::vec3(0,-50.0f,0), 1);
+  Island isle(glm::vec3(0, -50.0f, 0), 1);
   isle.initialise(glm::vec3(50.0f, -50.0f, 0.0f),
-                  glm::vec3(20.0f,20.0f,20.0f));
+                  glm::vec3(20.0f, 20.0f, 20.0f));
 
   // Camera setup
   glm::mat4 viewMatrix, projectionMatrix;
@@ -646,7 +994,7 @@ int main() {
 
     water.render(vp);
     skyBox.render(vp);
-    isle.render(vp,glm::vec3(cX, cY, cZ));
+    isle.render(vp, glm::vec3(cX, 0.0f, cZ));
 
     glfwSwapBuffers(window);
     glfwPollEvents();
@@ -655,6 +1003,7 @@ int main() {
   // END PROCESSES
   water.cleanup();
   skyBox.cleanup();
+  isle.cleanup();
 
   // Terminate glfw
   glfwTerminate();
