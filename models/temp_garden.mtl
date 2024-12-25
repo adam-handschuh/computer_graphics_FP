@@ -1,33 +1,13 @@
 # Blender MTL File: 'temp_garden.blend'
-# Material Count: 3
+# Material Count: 1
 
-newmtl Material.001
+newmtl Material
 Ns 323.999994
 Ka 1.000000 1.000000 1.000000
 Kd 0.800000 0.800000 0.800000
 Ks 0.500000 0.500000 0.500000
 Ke 0.000000 0.000000 0.000000
-Ni 1.000000
-d 1.000000
-illum 2
-
-newmtl Material.002
-Ns 225.000000
-Ka 1.000000 1.000000 1.000000
-Kd 0.800000 0.800000 0.800000
-Ks 0.500000 0.500000 0.500000
-Ke 0.000000 0.000000 0.000000
 Ni 1.450000
 d 1.000000
 illum 2
-map_Kd C:\\Users\\Adam\\Desktop\\College\\Trinity\\Year_4\\Computer Graphics\\final_project\\images\\test_grass.jpg
-
-newmtl Material.003
-Ns 225.000000
-Ka 1.000000 1.000000 1.000000
-Kd 0.295692 0.295692 0.295692
-Ks 0.500000 0.500000 0.500000
-Ke 0.000000 0.000000 0.000000
-Ni 1.450000
-d 1.000000
-illum 2
+map_Kd C:\\Users\\Adam\\Desktop\\College\\Trinity\\Year_4\\Computer Graphics\\final_project\\images\\tree_garden.png

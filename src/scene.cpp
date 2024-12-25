@@ -512,12 +512,12 @@ struct Water {
 };
 struct PointLight {
   // Lighting control
-  const glm::vec3 wave500 = glm::vec3(0.0f, 255.0f, 146.0f);
-  const glm::vec3 wave600 = glm::vec3(255.0f, 190.0f, 0.0f);
-  const glm::vec3 wave700 = glm::vec3(205.0f, 0.0f, 0.0f);
-  glm::vec3 lightIntensity = 10.0f * (8.0f * wave500 + 15.6f * wave600 + 18.4f * wave700);
-  glm::vec3 lightPosition = glm::vec3(-275.0f, 500.0f, -275.0f);
-  glm::vec3 lightUp = glm::vec3(0, 0, 1);
+  const glm::vec3 wave500 = glm::vec3(0.0f, 128.0f, 255.0f);
+  const glm::vec3 wave600 = glm::vec3(100.0f, 100.0f, 200.0f);
+  const glm::vec3 wave700 = glm::vec3(50.0f, 0.0f, 150.0f);
+  glm::vec3 lightIntensity = 10.0f * (5.0f * wave500 + 8.0f * wave600 + 25.0f * wave700);
+  glm::vec3 lightPosition = glm::vec3(-250.0f, 300.0f, -250.0f);
+  glm::vec3 lightUp = glm::vec3(0, 1, 0);
 
 
 };
@@ -536,7 +536,7 @@ struct Car {
 
   float distCount = 0;
 
-  float speed = 0.0;
+  float speed;
   Asset *carModel;
 
   void initialise(glm::vec3 position, glm::vec3 scale, std::vector<std::vector<float>> grid) {
@@ -544,12 +544,12 @@ struct Car {
     this->scale = scale;
     this->grid = grid;
     try {
-      int randomX = (rand() % (grid.size() - 1));
-      int randomY = (rand() % (grid.size() - 1));
+      int randomX = (rand() % (grid.size() - 3))+1;
+      int randomY = (rand() % (grid.size() - 3))+1;
 
       while (grid.at(randomX).at(randomY) != -1) {
-        randomX = (rand() % (grid.size() - 1));
-        randomY = (rand() % (grid.size() - 1));
+        randomX = (rand() % (grid.size() - 3))+1;
+        randomY = (rand() % (grid.size() - 3))+1;
       }
       gridX = randomX;
       gridY = randomY;
@@ -565,7 +565,15 @@ struct Car {
 
       this->position.y = 100.0f;
 
-      carModel = new Asset("temp_car");
+      int random = rand() % 100;
+      // 70% chance to be a car
+      if(random > 30) {
+        speed = 0.025;
+        carModel = new Asset("temp_car");
+      }else{
+        speed = 0.05;
+        carModel = new Asset("temp_bus");
+      }
       carModel->initialise(position, scale);
 
       if ((gridX == 0 || gridX == grid.size() - 1) &&
@@ -801,9 +809,19 @@ struct Island {
   Asset *isleBase;
   Asset *building;
   Asset *building2;
+  Asset *building3;
   Asset *garden;
+
+  //Leaves
+  std::vector<Asset> leaves;
+  std::vector<glm::vec3> leafOffsets;
+  std::vector<GLfloat> leafSpeeds;
+  std::vector<GLfloat> leafSways;
+
   std::vector<Car> cars;
   std::vector<PointLight> lights;
+
+  int randomAngle;
 
   GLuint programID;
   GLuint mvpMatrixID;
@@ -867,9 +885,6 @@ struct Island {
             grid.at(randomX).at(randomY) != 0.0f &&
             grid.at(randomX).at(randomY) != -1) {
           grid.at(randomX).at(randomY) = 2.0f;
-          grid.at(randomX + 1).at(randomY) = 0.0f;
-          grid.at(randomX).at(randomY + 1) = 0.0f;
-          grid.at(randomX + 1).at(randomY + 1) = 0.0f;
           i++;
         }
       }
@@ -879,20 +894,40 @@ struct Island {
   void initialise(glm::vec3 position, glm::vec3 scale) {
     this->position = position;
     this->scale = scale;
+    //Basic models
     isleBase = new Asset("isle_base");
     building = new Asset("temp_building");
     building2 = new Asset("temp_building2");
+    building3 = new Asset("temp_building3");
     garden = new Asset("temp_garden");
 
+    building->initialise(position, scale);
+    building2->initialise(position, scale);
+    building3->initialise(position,scale);
+    garden->initialise(position, scale);
+
+    //Car models
     for(int i = 0; i < baseSize*isleScaleFactor; i ++){
       Car car;
       car.initialise(this->position, glm::vec3(1.0f,1.0f,1.0f), grid);
       cars.push_back(car);
     }
 
-    building->initialise(position, scale);
-    building2->initialise(position, scale);
-    garden->initialise(position, scale);
+    //Leaf models
+    for(int i = 0; i < 20; i ++){
+      Asset leaf = Asset("leaf");
+      leaf.initialise(position,scale);
+      leaves.push_back(leaf);
+      glm::vec3 offset = glm::vec3((((rand()%400)-200)/10.0f), 0, (((rand()%400)-200)/10.0f));
+      leafOffsets.push_back(offset);
+      GLfloat speed = (rand()%10)/1000.0f;
+      GLfloat sway = rand()%200;
+      leafSpeeds.push_back(speed);
+      leafSways.push_back(sway);
+    }
+
+
+
 
     isleBase->initialise(
         position,
@@ -909,7 +944,7 @@ struct Island {
   }
 
   void render(glm::mat4 cameraMatrix, glm::vec3 cameraPos) {
-    gardenHoverAnim += 0.05f;
+    gardenHoverAnim += 0.025f;
     if (gardenHoverAnim >= 360.0f) {
       gardenHoverAnim = 0.0f;
     }
@@ -923,21 +958,33 @@ struct Island {
           buildPos =
               glm::vec3(cameraPos.x + (i * (buildSpace)*scale.x), cameraPos.y,
                         cameraPos.z + (j * (buildSpace)*scale.x));
-          if (grid.at(i).at(j) > 0.5) {
+          if (grid.at(i).at(j) > 0.66) {
             building->render(cameraMatrix, buildPos);
-          } else {
+          } else if(grid.at(i).at(j) < 0.66 && grid.at(i).at(j) > 0.2){
             building2->render(cameraMatrix, buildPos);
+          }else{
+            building3->render(cameraMatrix, buildPos);
           }
         } else if (grid.at(i).at(j) == 2) {
           buildPos = glm::vec3(cameraPos.x + (i * (buildSpace)*scale.x),
                                cameraPos.y +
-                                   (5 * (sin(gardenHoverAnim * M_PI / 180.0f))),
+                                   (5 * (sin(gardenHoverAnim * M_PI / 180.0f))) - 200,
                                cameraPos.z + (j * (buildSpace)*scale.x));
           garden->render(cameraMatrix, buildPos);
+          //Leaf animation
+          for(int i = 0; i < leaves.size(); i ++){
+            leafOffsets.at(i).y += leafSpeeds.at(i);
+            if(leafOffsets.at(i).y >= 50.0f){
+              leafOffsets.at(i).y = 0;
+            }
+            leafSways.at(i) += 0.1;
+            leaves.at(i).rotate(glm::vec3(1,0,0), sin(leafSways.at(i)*M_PI/180.0f));
+            leaves.at(i).render(cameraMatrix,buildPos+leafOffsets.at(i));
+          }
         }
       }
     }
-    for (int i = 0; i < cars.size(); i++) {
+    for (int i = 0; i < cars.size(); i ++) {
       cars.at(i).render(cameraMatrix, cameraPos);
     }
   }
@@ -946,6 +993,7 @@ struct Island {
     isleBase->cleanup();
     building->cleanup();
     building2->cleanup();
+    building3->cleanup();
     for (Car car : cars) {
       car.carModel->cleanup();
     }
