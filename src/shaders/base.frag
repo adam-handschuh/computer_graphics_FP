@@ -13,9 +13,8 @@ void main(){
     float cosTheta = max(dot(normal,lightDir),0.0f);
 
     //Lambertian (Enhancement stuff)
-    float distance = length(vertPos.xyz);
-    float attenuation = 0.1/(distance);
-
+    float distance = length(vertPos.xz);
+    float attenuation = (0.1/(distance));
     //Tone-Mapping
     vec3 c = fragmentColor / (fragmentColor + vec3(1.0));
     //Gamma-Correction
@@ -23,4 +22,5 @@ void main(){
 
     //Lambertian (Output stuff with shadows)
     finalColor = vec4((cGamma*cosTheta*attenuation),1.0f);
+//    finalColor = vec4(fragmentColor,1.0f);
 }

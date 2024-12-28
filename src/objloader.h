@@ -6,6 +6,7 @@
 #define FINAL_OBJLOADER_H
 #include "stb_image.h"
 #include <config.h>
+#include <pointlight.h>
 struct Asset {
 
   std::string name;
@@ -32,14 +33,8 @@ struct Asset {
   GLuint normalBufferID;
   GLuint textureID;
   GLuint textureSamplerID;
+  GLuint shadowSamplerID;
 
-  //Lights & Shadows
-  const glm::vec3 wave500 = glm::vec3(0.0f, 128.0f, 255.0f);
-  const glm::vec3 wave600 = glm::vec3(100.0f, 100.0f, 200.0f);
-  const glm::vec3 wave700 = glm::vec3(50.0f, 0.0f, 150.0f);
-  glm::vec3 lightIntensity = 10.0f * (5.0f * wave500 + 8.0f * wave600 + 25.0f * wave700);
-  glm::vec3 lightPosition = glm::vec3(150.0f, 300.0f, 150.0f); 
-  glm::vec3 lightUp = glm::vec3(0, 1, 0);
 
   GLuint depthTextID;
   GLuint lightPositionID;
@@ -47,8 +42,13 @@ struct Asset {
   GLuint firstPassProgID;
   GLuint secondPassProgID;
 
+  std::vector<PointLight> lights;
+
+  PointLight* tempLight;
+
   GLuint programID;
   GLuint mvpMatrixID;
+  GLuint mlpMatrixID;
 
   glm::vec3 position;
   glm::vec3 scale;
@@ -183,10 +183,12 @@ struct Asset {
     file.close();
   }
 
-  void initialise(glm::vec3 position, glm::vec3 scale) {
+  void initialise(glm::vec3 position, glm::vec3 scale, PointLight *light) {
     // Initialise the position and scale values
     this->position = position;
     this->scale = scale;
+
+    setLights(light);
 
     // Load model
     LoadModel(name);
@@ -259,20 +261,25 @@ struct Asset {
 
     // Create MVP and texSampler uniforms for the shader program
     mvpMatrixID = glGetUniformLocation(programID, "MVP");
+    mlpMatrixID = glGetUniformLocation(programID, "MLP");
     textureSamplerID = glGetUniformLocation(programID, "texSampler");
+    shadowSamplerID = glGetUniformLocation(programID, "shadowSampler");
+
 
     lightPositionID = glGetUniformLocation(programID, "lightPosition");
     lightIntensityID = glGetUniformLocation(programID, "lightIntensity");
 
   }
 
-  void render(glm::mat4 cameraMatrix, glm::vec3 localPos) {
+  void render(glm::mat4 cameraMatrix, glm::vec3 localPos, bool secondPass) {
 
     //lightPosition.x+=0.0005;
     //lightPosition.z+=0.0005;
 
     // Use specified shader program
-    glUseProgram(programID);
+    if(secondPass) {
+      glUseProgram(programID);
+    }
 
     // Handle Scene Buffers
     glEnableVertexAttribArray(0);
@@ -305,14 +312,23 @@ struct Asset {
     glm::mat4 mvp = cameraMatrix * modelMatrix;
     glUniformMatrix4fv(mvpMatrixID, 1, GL_FALSE, &mvp[0][0]);
 
+    if(secondPass) {
+      glm::mat4 mlp = tempLight->lightMatrix() * modelMatrix;
+      glUniformMatrix4fv(mlpMatrixID, 1, GL_FALSE, &mlp[0][0]);
+    }
+
     // Bind texture
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, textureID);
     glUniform1i(textureSamplerID, 0);
 
-    // Set light data
-    glUniform3fv(lightPositionID, 1, &lightPosition[0]);
-    glUniform3fv(lightIntensityID, 1, &lightIntensity[0]);
+    if(secondPass) {
+      glUniform1i(shadowSamplerID, 1);
+
+      glUniform3fv(lightPositionID, 1, &tempLight->lightPosition[0]);
+      glUniform3fv(lightIntensityID, 1, &tempLight->lightIntensity[0]);
+    }
+
 
     // Draw shape
     glDrawElements(GL_TRIANGLES,               // mode
@@ -340,10 +356,11 @@ struct Asset {
     this->angle = angle;
   }
 
-  void setLights(glm::vec3 lightPosition, glm::vec3 lightIntensity){
-    this->lightPosition = lightPosition;
-    this->lightIntensity = lightIntensity;
+  void setLights(PointLight* light){
+    this->tempLight = light;
   }
+
+
 };
 
 #endif // FINAL_OBJLOADER_H

@@ -10,7 +10,8 @@ add_executable(Final
         src/scene.cpp
         src/glad.c
         src/shaders/shader.cpp
-        src/objloader.h)
+        src/objloader.h
+        src/pointlight.h)
 
 target_include_directories(Final
         PRIVATE external/glad/include

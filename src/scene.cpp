@@ -1,4 +1,6 @@
 #include "config.h"
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <stb/stb_image_write.h>
 
 // VARIABLES
 static int windowWidth = 1366;
@@ -6,7 +8,6 @@ static int windowHeight = 768;
 static GLFWwindow *window; // Create window
 static void key_callback(GLFWwindow *window, int key, int scanCode, int action,
                          int mode);
-double mouseX, mouseY;
 
 // camera
 float cX = 0.0f;
@@ -26,11 +27,14 @@ static float camera_far = 8000.0f;
 //Shadow Map
 static int shadowMapWidth = 0;
 static int shadowMapHeight = 0;
+
 GLuint fbo;
 GLuint depthTex;
-static float depthFoV = 100.0f;
-static float depthNear = 50.0f;
-static float depthFar = 2000.0f;
+GLuint mlpMatID;
+
+PointLight* moon;
+
+GLuint firstPassID;
 
 // FUNCTIONS
 static void ProgramSetup() {
@@ -42,7 +46,7 @@ static void ProgramSetup() {
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE); // For MacOS
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-  window = glfwCreateWindow(windowWidth, windowHeight, "My Window", NULL, NULL);
+  window = glfwCreateWindow(windowWidth, windowHeight, "Approaching a futuristic Emerald Isle", NULL, NULL);
   glfwMakeContextCurrent(window);
   glfwSetKeyCallback(window, key_callback);
 
@@ -52,7 +56,35 @@ static void ProgramSetup() {
   glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
   glViewport(0, 0, windowWidth, windowHeight);
   glEnable(GL_DEPTH_TEST);
-  // glEnable(GL_CULL_FACE);
+  glEnable(GL_CULL_FACE);
+
+  // FBO
+  // FBO setup
+  glGenFramebuffers(1, &fbo);
+  glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+  //Depth Texture setup
+  glGenTextures(1, &depthTex);
+  glBindTexture(GL_TEXTURE_2D, depthTex);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT,
+               windowWidth, windowHeight, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+  glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depthTex, 0);
+  glDrawBuffer(GL_NONE);
+  glReadBuffer(GL_NONE);
+
+  moon = new PointLight(windowWidth,windowHeight);
+
+  firstPassID = LoadShadersFromFile("../src/shaders/first.vert", "../src/shaders/first.frag");
+  if(firstPassID == 0)
+  {
+    std::cerr << "Failed to load shaders." << std::endl;
+  }
+  mlpMatID = glGetUniformLocation(firstPassID, "MLP");
 }
 static GLuint LoadTextureTileBox(const char *texture_file_path) {
   int w, h, channels;
@@ -113,6 +145,44 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
     camera_aimX += 5;
   }
 }
+
+static void saveDepthTexture(GLuint fbo, std::string filename) {
+  int width = shadowMapWidth;
+  int height = shadowMapHeight;
+  if (shadowMapWidth == 0 || shadowMapHeight == 0) {
+    width = windowWidth;
+    height = windowHeight;
+  }
+  int channels = 3;
+
+  std::vector<float> depth(width * height);
+  glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+  glReadBuffer(GL_DEPTH_COMPONENT);
+  glReadPixels(0, 0, width, height, GL_DEPTH_COMPONENT, GL_FLOAT, depth.data());
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+  std::vector<unsigned char> img(width * height * 3);
+  for (int i = 0; i < width * height; ++i) img[3*i] = img[3*i+1] = img[3*i+2] = depth[i] * 255;
+
+  stbi_write_png(filename.c_str(), width, height, channels, img.data(), width * channels);
+}
+
+
+void firstPass(){
+  glBindFramebuffer(GL_FRAMEBUFFER, fbo);
+  glViewport(0,0,shadowMapWidth, shadowMapHeight);
+  glClear(GL_DEPTH_BUFFER_BIT);
+  glUseProgram(firstPassID);
+  glm::mat4 mlp = moon->lightMatrix();
+  glUniformMatrix4fv(mlpMatID, 1, GL_FALSE, &mlp[0][0]);
+};
+void secondPass(){
+  glBindFramebuffer(GL_FRAMEBUFFER,0);
+  glViewport(0,0,windowWidth,windowHeight);
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glActiveTexture(GL_TEXTURE1);
+  glBindTexture(GL_TEXTURE_2D,depthTex);
+};
 
 // STRUCTS
 struct SkyBox {
@@ -392,24 +462,9 @@ struct SkyBox {
 };
 struct Water {
   // WATER
-  GLfloat vertexBufferData[12]{
-      // Water surface
-      -1.0f, 0.0f, -1.0f, 1.0f,  0.0f, -1.0f,
-      1.0f,  0.0f, 1.0f,  -1.0f, 0.0f, 1.0f,
-  };
 
-  GLfloat colourBufferData[12]{
-      // Light-Blue
-      0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f, 0.0f, 0.0f, 1.0f,
-  };
 
-  GLuint indexBufferData[6]{
-      0, 1, 2, 0, 2, 3,
-  };
-
-  GLfloat normalBufferData[12]{1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f,
-                               1.0f, 1.0f, 1.0f, 1.0f, 1.0f, 1.0f};
-
+  Asset* waterModel;
   GLuint vertexArrayID;
   GLuint vertexBufferID;
   GLuint colorBufferID;
@@ -426,34 +481,8 @@ struct Water {
     this->position = position;
     this->scale = scale;
 
-    // Create a vertex array object
-    glGenVertexArrays(1, &vertexArrayID);
-    glBindVertexArray(vertexArrayID);
-
-    // Create a vertex buffer object to store the vertex data
-    glGenBuffers(1, &vertexBufferID);
-    glBindBuffer(GL_ARRAY_BUFFER, vertexBufferID);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertexBufferData), vertexBufferData,
-                 GL_STATIC_DRAW);
-
-    // Create a vertex buffer object to store the color data
-    glGenBuffers(1, &colorBufferID);
-    glBindBuffer(GL_ARRAY_BUFFER, colorBufferID);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(colourBufferData), colourBufferData,
-                 GL_STATIC_DRAW);
-
-    // Create a vertex buffer object to store the vertex normals
-    glGenBuffers(1, &normalBufferID);
-    glBindBuffer(GL_ARRAY_BUFFER, normalBufferID);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(normalBufferData), normalBufferData,
-                 GL_STATIC_DRAW);
-
-    // Create an index buffer object to store the index data that defines
-    // triangle faces
-    glGenBuffers(1, &indexBufferID);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBufferID);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indexBufferData),
-                 indexBufferData, GL_STATIC_DRAW);
+    waterModel = new Asset("isle_sea");
+    waterModel->initialise(this->position,this->scale, moon);
 
     // Create and compile our GLSL program from the shaders
     programID = LoadShadersFromFile("../src/shaders/base.vert",
@@ -463,44 +492,12 @@ struct Water {
       std::cerr << "Failed to load the \"water\" shaders." << std::endl;
     }
 
-    mvpMatrixID = glGetUniformLocation(programID, "MVP");
+    //mvpMatrixID = glGetUniformLocation(programID, "MVP");
   }
 
-  void render(glm::mat4 cameraMatrix) {
-    glUseProgram(programID);
-
-    // Handle Scene Buffers
-    glEnableVertexAttribArray(0);
-    glBindBuffer(GL_ARRAY_BUFFER, vertexBufferID);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
-
-    glEnableVertexAttribArray(1);
-    glBindBuffer(GL_ARRAY_BUFFER, colorBufferID);
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, 0);
-
-    glEnableVertexAttribArray(2);
-    glBindBuffer(GL_ARRAY_BUFFER, normalBufferID);
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 0, 0);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBufferID);
-
-    // Set model-view-projection matrix
-    glm::mat4 modelMatrix = glm::mat4(1.0f);
-    modelMatrix = glm::translate(modelMatrix, position);
-    modelMatrix = glm::scale(modelMatrix, scale);
-
-    glm::mat4 mvp = cameraMatrix * modelMatrix;
-    glUniformMatrix4fv(mvpMatrixID, 1, GL_FALSE, &mvp[0][0]);
-
-    glDrawElements(GL_TRIANGLES,            // mode
-                   sizeof(indexBufferData), // number of indices
-                   GL_UNSIGNED_INT,         // type
-                   (void *)0                // element array buffer offset
-    );
-
-    glDisableVertexAttribArray(0);
-    glDisableVertexAttribArray(1);
-    glDisableVertexAttribArray(2);
+  void render(glm::mat4 cameraMatrix, bool secondPass) {
+//    glUseProgram(programID);
+    waterModel->render(cameraMatrix, glm::vec3(0,0,0), secondPass);
   }
 
   void cleanup() {
@@ -509,17 +506,6 @@ struct Water {
     glDeleteBuffers(1, &vertexArrayID);
     glDeleteProgram(programID);
   }
-};
-struct PointLight {
-  // Lighting control
-  const glm::vec3 wave500 = glm::vec3(0.0f, 128.0f, 255.0f);
-  const glm::vec3 wave600 = glm::vec3(100.0f, 100.0f, 200.0f);
-  const glm::vec3 wave700 = glm::vec3(50.0f, 0.0f, 150.0f);
-  glm::vec3 lightIntensity = 10.0f * (5.0f * wave500 + 8.0f * wave600 + 25.0f * wave700);
-  glm::vec3 lightPosition = glm::vec3(-250.0f, 300.0f, -250.0f);
-  glm::vec3 lightUp = glm::vec3(0, 1, 0);
-
-
 };
 struct Car {
   int direction = 1;        // 1 - north | 2 - east | 3 - south | 4 - west
@@ -574,7 +560,7 @@ struct Car {
         speed = 0.05;
         carModel = new Asset("temp_bus");
       }
-      carModel->initialise(position, scale);
+      carModel->initialise(position, scale, moon);
 
       if ((gridX == 0 || gridX == grid.size() - 1) &&
           (gridY > 0 && gridY < grid.size() - 1)) {
@@ -602,7 +588,7 @@ struct Car {
     }
   }
 
-  void render(glm::mat4 cameraMatrix, glm::vec3 camPos) {
+  void render(glm::mat4 cameraMatrix, glm::vec3 camPos, bool secondPass) {
     // speed adjustments
 
     if(!turned){
@@ -679,7 +665,7 @@ struct Car {
       }
     }
     carModel->rotate(glm::vec3(0.0f,1.0f,0.0f), turnAngle*M_PI/180);
-    carModel->render(cameraMatrix, camPos - position);
+    carModel->render(cameraMatrix, camPos - position, secondPass);
     distCount += speed;
   }
 
@@ -801,7 +787,6 @@ struct Car {
   }
 
 };
-
 struct Island {
   glm::vec3 islePos;
   int isleScaleFactor;
@@ -901,10 +886,10 @@ struct Island {
     building3 = new Asset("temp_building3");
     garden = new Asset("temp_garden");
 
-    building->initialise(position, scale);
-    building2->initialise(position, scale);
-    building3->initialise(position,scale);
-    garden->initialise(position, scale);
+    building->initialise(position, scale,moon);
+    building2->initialise(position, scale,moon);
+    building3->initialise(position,scale,moon);
+    garden->initialise(position, scale,moon);
 
     //Car models
     for(int i = 0; i < baseSize*isleScaleFactor; i ++){
@@ -916,7 +901,7 @@ struct Island {
     //Leaf models
     for(int i = 0; i < 20; i ++){
       Asset leaf = Asset("leaf");
-      leaf.initialise(position,scale);
+      leaf.initialise(position,scale,moon);
       leaves.push_back(leaf);
       glm::vec3 offset = glm::vec3((((rand()%400)-200)/10.0f), 0, (((rand()%400)-200)/10.0f));
       leafOffsets.push_back(offset);
@@ -932,7 +917,7 @@ struct Island {
     isleBase->initialise(
         position,
         glm::vec3(scale.x * buildSpace * isleScaleFactor * baseSize, scale.y,
-                  scale.z * buildSpace * isleScaleFactor * baseSize));
+                  scale.z * buildSpace * isleScaleFactor * baseSize),moon);
 
     // Create and compile our GLSL program from the shaders
     programID = LoadShadersFromFile("../src/shaders/base.vert",
@@ -943,14 +928,14 @@ struct Island {
     }
   }
 
-  void render(glm::mat4 cameraMatrix, glm::vec3 cameraPos) {
+  void render(glm::mat4 cameraMatrix, glm::vec3 cameraPos, bool secondPass) {
     gardenHoverAnim += 0.025f;
     if (gardenHoverAnim >= 360.0f) {
       gardenHoverAnim = 0.0f;
     }
 
     glUseProgram(programID);
-    isleBase->render(cameraMatrix, cameraPos);
+    isleBase->render(cameraMatrix, cameraPos, secondPass);
     for (int i = 0; i < grid.size(); i++) {
       for (int j = 0; j < grid.size(); j++) {
         glm::vec3 buildPos;
@@ -959,18 +944,18 @@ struct Island {
               glm::vec3(cameraPos.x + (i * (buildSpace)*scale.x), cameraPos.y,
                         cameraPos.z + (j * (buildSpace)*scale.x));
           if (grid.at(i).at(j) > 0.66) {
-            building->render(cameraMatrix, buildPos);
+            building->render(cameraMatrix, buildPos,secondPass);
           } else if(grid.at(i).at(j) < 0.66 && grid.at(i).at(j) > 0.2){
-            building2->render(cameraMatrix, buildPos);
+            building2->render(cameraMatrix, buildPos, secondPass);
           }else{
-            building3->render(cameraMatrix, buildPos);
+            building3->render(cameraMatrix, buildPos, secondPass);
           }
         } else if (grid.at(i).at(j) == 2) {
           buildPos = glm::vec3(cameraPos.x + (i * (buildSpace)*scale.x),
                                cameraPos.y +
                                    (5 * (sin(gardenHoverAnim * M_PI / 180.0f))) - 200,
                                cameraPos.z + (j * (buildSpace)*scale.x));
-          garden->render(cameraMatrix, buildPos);
+          garden->render(cameraMatrix, buildPos, secondPass);
           //Leaf animation
           for(int i = 0; i < leaves.size(); i ++){
             leafOffsets.at(i).y += leafSpeeds.at(i);
@@ -979,13 +964,13 @@ struct Island {
             }
             leafSways.at(i) += 0.1;
             leaves.at(i).rotate(glm::vec3(1,0,0), sin(leafSways.at(i)*M_PI/180.0f));
-            leaves.at(i).render(cameraMatrix,buildPos+leafOffsets.at(i));
+            leaves.at(i).render(cameraMatrix,buildPos+leafOffsets.at(i),secondPass);
           }
         }
       }
     }
     for (int i = 0; i < cars.size(); i ++) {
-      cars.at(i).render(cameraMatrix, cameraPos);
+      cars.at(i).render(cameraMatrix, cameraPos, secondPass);
     }
   }
 
@@ -1006,13 +991,9 @@ int main() {
   // Object initialisation
   std::vector<PointLight> pLights;
 
-  PointLight moon;
-
-  pLights.push_back(moon);
-
   Water water;
   water.initialise(glm::vec3(0.0f, -50.0f, 0.0f),
-                   glm::vec3(5000.0f, 1.0f, 5000.0f));
+                   glm::vec3(5000.0f, 5000.0f, 5000.0f));
   SkyBox skyBox;
   skyBox.initialise(glm::vec3(0.0f, 0.0f, 0.0f),
                     glm::vec3(5000.0f, 5000.0f, 5000.0f));
@@ -1021,10 +1002,16 @@ int main() {
   isle.initialise(glm::vec3(50.0f, -50.0f, 0.0f),
                   glm::vec3(20.0f, 20.0f, 20.0f));
 
+  Asset moonModel ("moon");
+  moonModel.initialise(moon->lightPosition, glm::vec3(-10,10,-10),moon);
+
   // Camera setup
   glm::mat4 viewMatrix, projectionMatrix;
   projectionMatrix = glm::perspective(glm::radians(camera_fov), 16.0f / 9.0f,
                                       camera_near, camera_far);
+
+  shadowMapWidth = windowWidth;
+  shadowMapHeight = windowHeight;
 
   // RENDER LOOP
   do {
@@ -1040,9 +1027,18 @@ int main() {
     viewMatrix = glm::lookAt(camera_pos, camera_lookAt, camera_up);
     glm::mat4 vp = projectionMatrix * viewMatrix;
 
-    water.render(vp);
+    firstPass();
+    water.render(moon->lightMatrix(), false);
+    skyBox.render(moon->lightMatrix());
+    isle.render(moon->lightMatrix(), glm::vec3(cX, 0.0f, cZ), false);
+    //saveDepthTexture(fbo, "depth_camera.png");
+
+    secondPass();
+    water.render(vp, true);
     skyBox.render(vp);
-    isle.render(vp, glm::vec3(cX, 0.0f, cZ));
+    isle.render(vp, glm::vec3(cX, 0.0f, cZ), true);
+
+
 
     glfwSwapBuffers(window);
     glfwPollEvents();
