@@ -13,6 +13,10 @@ static void key_callback(GLFWwindow *window, int key, int scanCode, int action,
 float cX = 0.0f;
 float cY = 300.0f;
 float cZ = 0.0f; // camera positions
+
+float speedX = 0;
+float speedZ = 0;
+
 float camera_aimX = 0.0f;
 float camera_aimY = 0.0f;
 float camera_speed = 50.0f;
@@ -35,7 +39,6 @@ GLuint mlpMatID;
 //Reflections
 GLuint refFbo;
 GLuint refTex;
-GLuint refMatID;
 
 PointLight* moon;
 
@@ -135,19 +138,27 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
     cX += forwardAim.x * camera_speed;
     cY += forwardAim.y * camera_speed;
     cZ += forwardAim.z * camera_speed;
+    speedX = forwardAim.x * camera_speed;
+    speedZ = forwardAim.z * camera_speed;
   }
   if (key == GLFW_KEY_S) {
     cX -= forwardAim.x * camera_speed;
     cY -= forwardAim.y * camera_speed;
     cZ -= forwardAim.z * camera_speed;
+    speedX = -forwardAim.x * camera_speed;
+    speedZ = -forwardAim.z * camera_speed;
   }
   if (key == GLFW_KEY_A) {
     cX += forwardAim.z * camera_speed;
     cZ -= forwardAim.x * camera_speed;
+    speedX = forwardAim.z * camera_speed;
+    speedZ = -forwardAim.x * camera_speed;
   }
   if (key == GLFW_KEY_D) {
     cX -= forwardAim.z * camera_speed;
     cZ += forwardAim.x * camera_speed;
+    speedX = -forwardAim.z * camera_speed;
+    speedZ = forwardAim.x * camera_speed;
   }
   // Look
   if (key == GLFW_KEY_UP) {
@@ -587,6 +598,7 @@ struct Water {
     float timeValue = glfwGetTime(); // GLFW provides time since app start
     glUniform1f(glGetUniformLocation(programID, "time"), timeValue);
 
+
     glActiveTexture(GL_TEXTURE3);
     glBindTexture(GL_TEXTURE_2D, textureID);
     glUniform1i(textureSamplerID, 3);
@@ -924,11 +936,15 @@ struct Island {
   Island(glm::vec3 islePos, int isleScaleFactor) {
     this->islePos = islePos;
     this->isleScaleFactor = isleScaleFactor;
-    createIsleGrid(isleScaleFactor);
   };
+
+  void setIsleScaleFactor(int isleScaleFactor){
+    this->isleScaleFactor = isleScaleFactor;
+  }
 
   void createIsleGrid(int scaleFac) {
     // CREATE AN OUTER LAYER OF -1s
+    grid.clear();
     std::vector<float> nullRow;
     for (int i = 0; i < baseSize * scaleFac; i++) {
       nullRow.push_back(-1);
@@ -981,6 +997,8 @@ struct Island {
   void initialise(glm::vec3 position, glm::vec3 scale) {
     this->position = position;
     this->scale = scale;
+    createIsleGrid(isleScaleFactor);
+
     //Basic models
     isleBase = new Asset("isle_base");
     building = new Asset("temp_building");
@@ -1101,7 +1119,7 @@ int main() {
                     glm::vec3(5000.0f, 5000.0f, 5000.0f));
 
   Island isle(glm::vec3(0, 50.0f, 0), 1);
-  isle.initialise(glm::vec3(50.0f, 0.0f, 0.0f),
+  isle.initialise(glm::vec3(0.0f, 0.0f, 0.0f),
                   glm::vec3(20.0f, 20.0f, 20.0f));
 
   Asset moonModel ("moon");
@@ -1114,6 +1132,8 @@ int main() {
 
   shadowMapWidth = windowWidth;
   shadowMapHeight = windowHeight;
+
+  int random = 0;
 
   // RENDER LOOP
   do {
@@ -1128,6 +1148,19 @@ int main() {
     camera_lookAt = camera_pos + forwardAim;
     viewMatrix = glm::lookAt(camera_pos, camera_lookAt, camera_up);
     glm::mat4 vp = projectionMatrix * viewMatrix;
+
+    //if island is out of bounds, reset scale and spawn ahead
+    if(sqrt((cX*cX) + (cZ*cZ)) > 5600){
+      random = rand() % 4;
+      isle.setIsleScaleFactor(random);
+
+      isle.initialise(glm::vec3(0, 0.0f, 0),
+                      glm::vec3(20.0f, 20.0f, 20.0f));
+      cX = (-cX/10)*9;
+      cZ = (-cZ/10)*9;
+    }
+
+    std::cout << "random : " << random << std::endl;
 
     firstPass();
     skyBox.render(moon->lightMatrix());
@@ -1153,6 +1186,10 @@ int main() {
     water.render(vp);
     skyBox.render(vp);
     isle.render(vp, glm::vec3(cX, 0.0f, cZ), true);
+
+
+
+
 
 
     glfwSwapBuffers(window);

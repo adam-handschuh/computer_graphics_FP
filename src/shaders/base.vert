@@ -7,6 +7,7 @@ layout(location = 2) in vec2 vertexUV;
 uniform mat4 MVP;
 uniform float time;
 
+
 out vec3 fragmentColor;
 out vec3 vertPos;
 out vec4 clipSpace;
@@ -17,5 +18,5 @@ void main(){
     gl_Position = clipSpace;
     fragmentColor = vertexColor;
     vertPos = vertexPosition;
-    imgTexCoord = vertexUV + vec2(time * (0.005), 0.0);
+    imgTexCoord = vertexUV + vec2(time * 0.01, 0.0);
 }
