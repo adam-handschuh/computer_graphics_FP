@@ -2,25 +2,19 @@
 
 in vec3 fragmentColor;
 in vec3 vertPos;
-in vec3 vertNorm;
+in vec4 clipSpace;
+in vec2 imgTexCoord;
+
+uniform sampler2D refSampler;
+uniform sampler2D imgSampler;
 
 out vec4 finalColor;
 
 void main(){
-    vec3 temp = vec3(0.0f,100.0f,0.0f);
-    vec3 lightDir = normalize(temp-vertPos);
-    vec3 normal = normalize(vertNorm);
-    float cosTheta = max(dot(normal,lightDir),0.0f);
+    //Perspective division
+    vec2 ndc = ((clipSpace.xy/clipSpace.w)/2.0) + 0.5;
 
-    //Lambertian (Enhancement stuff)
-    float distance = length(vertPos.xz);
-    float attenuation = (0.1/(distance));
-    //Tone-Mapping
-    vec3 c = fragmentColor / (fragmentColor + vec3(1.0));
-    //Gamma-Correction
-    vec3 cGamma = pow(c, vec3(1.0 / 2.2));
-
-    //Lambertian (Output stuff with shadows)
-    finalColor = vec4((cGamma*cosTheta*attenuation),1.0f);
-//    finalColor = vec4(fragmentColor,1.0f);
+    vec2 reflectCoords = vec2(1.0-ndc.x, ndc.y);
+    //Final output
+    finalColor = vec4(mix(texture(imgSampler,imgTexCoord).rgb,texture(refSampler, reflectCoords).rgb,0.70),1.0f);
 }

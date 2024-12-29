@@ -11,11 +11,11 @@ struct PointLight {
   const glm::vec3 wave500 = glm::vec3(0.0f, 128.0f, 255.0f);
   const glm::vec3 wave600 = glm::vec3(100.0f, 100.0f, 200.0f);
   const glm::vec3 wave700 = glm::vec3(50.0f, 0.0f, 150.0f);
-  glm::vec3 lightIntensity = 0.1f * (5.0f * wave500 + 8.0f * wave600 + 25.0f * wave700);
+  glm::vec3 lightIntensity = 0.2f * (10.0f * wave500 + 8.0f * wave600 + 25.0f * wave700);
   glm::vec3 lightPosition = glm::vec3(-150.0f, 500.0f, -150.0f);
   glm::vec3 lightUp = glm::vec3(0, 0, -1);
-  float depthFoV = 100.0f;
-  float depthNear = 100.0f;
+  float depthFoV = 90.0f;
+  float depthNear = 50.0f;
   float depthFar = 6000.0f;
   float shadowMapWidth, shadowMapHeight;
 

@@ -2,17 +2,20 @@
 
 layout (location=0) in vec3 vertexPosition;
 layout (location=1) in vec3 vertexColor;
-layout (location=2) in vec3 vertexNormal;
+layout(location = 2) in vec2 vertexUV;
 
 uniform mat4 MVP;
+uniform float time;
 
 out vec3 fragmentColor;
 out vec3 vertPos;
-out vec3 vertNorm;
+out vec4 clipSpace;
+out vec2 imgTexCoord;
 
 void main(){
-    gl_Position = MVP * vec4(vertexPosition, 1);
+    clipSpace = MVP *vec4(vertexPosition, 1);
+    gl_Position = clipSpace;
     fragmentColor = vertexColor;
     vertPos = vertexPosition;
-    vertNorm = vertexNormal;
+    imgTexCoord = vertexUV + vec2(time * (0.005), 0.0);
 }

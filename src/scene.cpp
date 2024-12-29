@@ -32,6 +32,11 @@ GLuint fbo;
 GLuint depthTex;
 GLuint mlpMatID;
 
+//Reflections
+GLuint refFbo;
+GLuint refTex;
+GLuint refMatID;
+
 PointLight* moon;
 
 GLuint firstPassID;
@@ -58,11 +63,10 @@ static void ProgramSetup() {
   glEnable(GL_DEPTH_TEST);
   glEnable(GL_CULL_FACE);
 
-  // FBO
+  // DepthFBO
   // FBO setup
   glGenFramebuffers(1, &fbo);
   glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-
   //Depth Texture setup
   glGenTextures(1, &depthTex);
   glBindTexture(GL_TEXTURE_2D, depthTex);
@@ -72,10 +76,21 @@ static void ProgramSetup() {
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-
   glFramebufferTexture(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, depthTex, 0);
   glDrawBuffer(GL_NONE);
   glReadBuffer(GL_NONE);
+
+  //ReflectionFBO
+  glGenFramebuffers(1, &refFbo);
+  glBindFramebuffer(GL_FRAMEBUFFER, refFbo);
+  glGenTextures(1, &refTex);
+  glBindTexture(GL_TEXTURE_2D, refTex);
+  glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, windowWidth, windowHeight, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+  glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+  glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, refTex, 0);
 
   moon = new PointLight(windowWidth,windowHeight);
 
@@ -86,12 +101,24 @@ static void ProgramSetup() {
   }
   mlpMatID = glGetUniformLocation(firstPassID, "MLP");
 }
-static GLuint LoadTextureTileBox(const char *texture_file_path) {
-  int w, h, channels;
-  uint8_t *img = stbi_load(texture_file_path, &w, &h, &channels, 3);
-  GLuint texture;
-  glGenTextures(1, &texture);
-  glBindTexture(GL_TEXTURE_2D, texture);
+static GLuint LoadTexture(std::string imageName) {
+    // Load image
+    GLuint textureID;
+
+    int width, height, channels;
+    uint8_t* data = stbi_load(("../images/" + imageName).c_str(), &width,
+                              &height, &channels, 0);
+    glGenTextures(1, &textureID);
+    glBindTexture(GL_TEXTURE_2D, textureID);
+    if (data) {
+      glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB,
+                   GL_UNSIGNED_BYTE, data);
+      glGenerateMipmap(GL_TEXTURE_2D);
+      std::cout << ("../images/" + imageName).c_str() << std::endl;
+    } else {
+      std::cout << "could not load image" << std::endl;
+    }
+    stbi_image_free(data);
 
   // To tile textures on a box, we set wrapping to repeat
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
@@ -100,18 +127,9 @@ static GLuint LoadTextureTileBox(const char *texture_file_path) {
                   GL_LINEAR_MIPMAP_LINEAR);
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
-  if (img) {
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, w, h, 0, GL_RGB, GL_UNSIGNED_BYTE,
-                 img);
-    glGenerateMipmap(GL_TEXTURE_2D);
-  } else {
-    std::cout << "Failed to load texture " << texture_file_path << std::endl;
-  }
-  stbi_image_free(img);
-
-  return texture;
+  return textureID;
 }
-void key_callback(GLFWwindow *window, int key, int scancode, int action, int mode) {
+static void key_callback(GLFWwindow *window, int key, int scancode, int action, int mode) {
   // Move
   if (key == GLFW_KEY_W) {
     cX += forwardAim.x * camera_speed;
@@ -145,28 +163,6 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
     camera_aimX += 5;
   }
 }
-
-static void saveDepthTexture(GLuint fbo, std::string filename) {
-  int width = shadowMapWidth;
-  int height = shadowMapHeight;
-  if (shadowMapWidth == 0 || shadowMapHeight == 0) {
-    width = windowWidth;
-    height = windowHeight;
-  }
-  int channels = 3;
-
-  std::vector<float> depth(width * height);
-  glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-  glReadBuffer(GL_DEPTH_COMPONENT);
-  glReadPixels(0, 0, width, height, GL_DEPTH_COMPONENT, GL_FLOAT, depth.data());
-  glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-  std::vector<unsigned char> img(width * height * 3);
-  for (int i = 0; i < width * height; ++i) img[3*i] = img[3*i+1] = img[3*i+2] = depth[i] * 255;
-
-  stbi_write_png(filename.c_str(), width, height, channels, img.data(), width * channels);
-}
-
 
 void firstPass(){
   glBindFramebuffer(GL_FRAMEBUFFER, fbo);
@@ -399,7 +395,7 @@ struct SkyBox {
     glBufferData(GL_ARRAY_BUFFER, sizeof(uvBufferData), uvBufferData,
                  GL_STATIC_DRAW);
 
-    textureID = LoadTextureTileBox("../images/sky.png");
+    textureID = LoadTexture("sky.png");
     programID = LoadShadersFromFile("../src/shaders/sky.vert",
                                     "../src/shaders/sky.frag");
     if (programID == 0) {
@@ -462,16 +458,43 @@ struct SkyBox {
 };
 struct Water {
   // WATER
+  GLfloat vertexBufferData[12]{
+      -1.0f,0.0f,-1.0f,
+      -1.0f,0.0f,1.0f,
+      1.0f,0.0f,1.0f,
+      1.0f,0.0f,-1.0f
+  };
+
+  GLuint indexBufferData[6]{
+      0,1,2,
+      0,2,3
+  };
+
+  GLfloat colourBufferData[12]{
+      0.0f,0.0f,1.0f,
+      0.0f,0.0f,1.0f,
+      0.0f,0.0f,1.0f,
+      0.0f,0.0f,1.0f
+  };
+
+  GLfloat uvBufferData[8]{
+      0.0f,0.0f,
+      0.0f,1.0f,
+      1.0f,1.0f,
+      1.0f,0.0f
+  };
 
 
-  Asset* waterModel;
   GLuint vertexArrayID;
   GLuint vertexBufferID;
-  GLuint colorBufferID;
+  GLuint colourBufferID;
   GLuint indexBufferID;
   GLuint programID;
   GLuint mvpMatrixID;
-  GLuint normalBufferID;
+  GLuint uvBufferID;
+  GLuint refSamplerID;
+  GLuint textureID;
+  GLuint textureSamplerID;
 
   glm::vec3 position;
   glm::vec3 scale;
@@ -481,10 +504,41 @@ struct Water {
     this->position = position;
     this->scale = scale;
 
-    waterModel = new Asset("isle_sea");
-    waterModel->initialise(this->position,this->scale, moon);
+    // Create a vertex array object
+    glGenVertexArrays(1, &vertexArrayID);
+    glBindVertexArray(vertexArrayID);
 
-    // Create and compile our GLSL program from the shaders
+    // Create a vertex buffer object to store the vertex data
+    glGenBuffers(1, &vertexBufferID);
+    glBindBuffer(GL_ARRAY_BUFFER, vertexBufferID);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertexBufferData), vertexBufferData,
+                 GL_STATIC_DRAW);
+
+    // Create a vertex buffer object to store the color data
+    glGenBuffers(1, &colourBufferID);
+    glBindBuffer(GL_ARRAY_BUFFER, colourBufferID);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(colourBufferData), colourBufferData,
+                 GL_STATIC_DRAW);
+
+    // Create an index buffer object to store the index data that defines
+    // triangle faces
+    glGenBuffers(1, &indexBufferID);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBufferID);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indexBufferData),
+                 indexBufferData, GL_STATIC_DRAW);
+
+    // Sort out textures
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+    glGenBuffers(1, &uvBufferID);
+    glBindBuffer(GL_ARRAY_BUFFER, uvBufferID);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(uvBufferData), uvBufferData,
+                 GL_STATIC_DRAW);
+
+    textureID = LoadTexture("test_sea.jpg");
     programID = LoadShadersFromFile("../src/shaders/base.vert",
                                     "../src/shaders/base.frag");
 
@@ -492,17 +546,65 @@ struct Water {
       std::cerr << "Failed to load the \"water\" shaders." << std::endl;
     }
 
-    //mvpMatrixID = glGetUniformLocation(programID, "MVP");
+    mvpMatrixID = glGetUniformLocation(programID, "MVP");
+    refSamplerID = glGetUniformLocation(programID, "refSampler");
+    textureSamplerID = glGetUniformLocation(programID, "imgSampler");
   }
 
-  void render(glm::mat4 cameraMatrix, bool secondPass) {
-//    glUseProgram(programID);
-    waterModel->render(cameraMatrix, glm::vec3(0,0,0), secondPass);
+  void render(glm::mat4 cameraMatrix) {
+    glUseProgram(programID);
+
+    // Handle Scene Buffers
+    glEnableVertexAttribArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, vertexBufferID);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+    glEnableVertexAttribArray(1);
+    glBindBuffer(GL_ARRAY_BUFFER, colourBufferID);
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBufferID);
+
+
+    // Set model-view-projection matrix
+    glm::mat4 modelMatrix = glm::mat4(1.0f);
+    glm::vec3 cam(0, 0, 0);
+    modelMatrix = glm::translate(modelMatrix, position+cam);
+    modelMatrix = glm::scale(modelMatrix, scale);
+
+    glm::mat4 mvp = cameraMatrix * modelMatrix;
+    glUniformMatrix4fv(mvpMatrixID, 1, GL_FALSE, &mvp[0][0]);
+
+    glEnableVertexAttribArray(2);
+    glBindBuffer(GL_ARRAY_BUFFER, uvBufferID);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 0, 0);
+    // Set textureSampler to use texture unit 0
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D, refTex);
+    glUniform1i(refSamplerID, 2);
+
+
+    float timeValue = glfwGetTime(); // GLFW provides time since app start
+    glUniform1f(glGetUniformLocation(programID, "time"), timeValue);
+
+    glActiveTexture(GL_TEXTURE3);
+    glBindTexture(GL_TEXTURE_2D, textureID);
+    glUniform1i(textureSamplerID, 3);
+
+    glDrawElements(GL_TRIANGLES,            // mode
+                   sizeof(indexBufferData), // number of indices
+                   GL_UNSIGNED_INT,         // type
+                   (void *)0                // element array buffer offset
+    );
+
+    glDisableVertexAttribArray(0);
+    glDisableVertexAttribArray(1);
+    glDisableVertexAttribArray(2);
   }
 
   void cleanup() {
     glDeleteBuffers(1, &vertexBufferID);
-    glDeleteBuffers(1, &colorBufferID);
+    glDeleteBuffers(1, &colourBufferID);
     glDeleteBuffers(1, &vertexArrayID);
     glDeleteProgram(programID);
   }
@@ -992,14 +1094,14 @@ int main() {
   std::vector<PointLight> pLights;
 
   Water water;
-  water.initialise(glm::vec3(0.0f, -50.0f, 0.0f),
-                   glm::vec3(5000.0f, 5000.0f, 5000.0f));
+  water.initialise(glm::vec3(0.0f, 0.0f, 0.0f),
+                   glm::vec3(5000.0f, 1.0f, 5000.0f));
   SkyBox skyBox;
   skyBox.initialise(glm::vec3(0.0f, 0.0f, 0.0f),
                     glm::vec3(5000.0f, 5000.0f, 5000.0f));
 
-  Island isle(glm::vec3(0, -50.0f, 0), 1);
-  isle.initialise(glm::vec3(50.0f, -50.0f, 0.0f),
+  Island isle(glm::vec3(0, 50.0f, 0), 1);
+  isle.initialise(glm::vec3(50.0f, 0.0f, 0.0f),
                   glm::vec3(20.0f, 20.0f, 20.0f));
 
   Asset moonModel ("moon");
@@ -1028,16 +1130,29 @@ int main() {
     glm::mat4 vp = projectionMatrix * viewMatrix;
 
     firstPass();
-    water.render(moon->lightMatrix(), false);
     skyBox.render(moon->lightMatrix());
     isle.render(moon->lightMatrix(), glm::vec3(cX, 0.0f, cZ), false);
-    //saveDepthTexture(fbo, "depth_camera.png");
+    water.render(moon->lightMatrix());
+
+    //reflections
+
+    glm::mat4 rp,rProj,rView;
+    rView = glm::lookAt(glm::vec3(camera_pos.x, -camera_pos.y, camera_pos.z), glm::vec3(camera_pos.x, -camera_pos.y, camera_pos.z) + glm::vec3(forwardAim.x, -forwardAim.y, forwardAim.z), glm::vec3(0,-1,0));
+    rp = projectionMatrix * rView;
+    glBindFramebuffer(GL_FRAMEBUFFER, refFbo);
+    glViewport(0, 0, windowWidth, windowHeight);
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    moonModel.render(rp,-moon->lightPosition, true);
+    skyBox.render(rp);
+    isle.render(rp, glm::vec3(cX, 0.0f, cZ), true);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
 
     secondPass();
-    water.render(vp, true);
+    moonModel.render(vp,-moon->lightPosition, true);
+    water.render(vp);
     skyBox.render(vp);
     isle.render(vp, glm::vec3(cX, 0.0f, cZ), true);
-
 
 
     glfwSwapBuffers(window);
