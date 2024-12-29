@@ -26,7 +26,7 @@ glm::vec3 camera_up = glm::vec3(0.0f, 1.0f, 0.0f);
 glm::vec3 camera_lookAt(0.0f, 0.0f, 0.0f);
 static float camera_fov = 70.0f;
 static float camera_near = 0.1f;
-static float camera_far = 8000.0f;
+static float camera_far = 10000.0f;
 
 //Shadow Map
 static int shadowMapWidth = 0;
@@ -136,14 +136,18 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
   // Move
   if (key == GLFW_KEY_W) {
     cX += forwardAim.x * camera_speed;
-    cY += forwardAim.y * camera_speed;
+    if(!(cY + forwardAim.y * camera_speed < 0 || cY + forwardAim.y * camera_speed > 400)) {
+      cY += forwardAim.y * camera_speed;
+    }
     cZ += forwardAim.z * camera_speed;
     speedX = forwardAim.x * camera_speed;
     speedZ = forwardAim.z * camera_speed;
   }
   if (key == GLFW_KEY_S) {
     cX -= forwardAim.x * camera_speed;
-    cY -= forwardAim.y * camera_speed;
+    if(!(cY - forwardAim.y * camera_speed < 0 || cY - forwardAim.y * camera_speed > 400)) {
+      cY -= forwardAim.y * camera_speed;
+    }
     cZ -= forwardAim.z * camera_speed;
     speedX = -forwardAim.x * camera_speed;
     speedZ = -forwardAim.z * camera_speed;
@@ -172,6 +176,26 @@ static void key_callback(GLFWwindow *window, int key, int scancode, int action, 
   }
   if (key == GLFW_KEY_RIGHT) {
     camera_aimX += 5;
+  }
+}
+void showFPS(GLFWwindow *win){
+  static double previousTime = glfwGetTime();
+  static int frameCount = 0;
+
+  double currentTime = glfwGetTime();
+  double delta = currentTime - previousTime;
+  frameCount++;
+
+  // Update the window title every second
+  if (delta >= 1.0) {
+    double fps = double(frameCount) / delta;
+
+    std::ostringstream title;
+    title << "OpenGL Window - FPS: " << fps;
+    glfwSetWindowTitle(window, title.str().c_str());
+
+    frameCount = 0;
+    previousTime = currentTime;
   }
 }
 
@@ -1139,6 +1163,7 @@ int main() {
   do {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+    showFPS(window);
     // Render Camera-View
     forwardAim = glm::vec3(
         cos(camera_aimX * M_PI / 180) * cos(camera_aimY * M_PI / 180),
@@ -1151,7 +1176,7 @@ int main() {
 
     //if island is out of bounds, reset scale and spawn ahead
     if(sqrt((cX*cX) + (cZ*cZ)) > 5600){
-      random = rand() % 4;
+      random = (rand() % 3) + 1;
       isle.setIsleScaleFactor(random);
 
       isle.initialise(glm::vec3(0, 0.0f, 0),
@@ -1168,7 +1193,6 @@ int main() {
     water.render(moon->lightMatrix());
 
     //reflections
-
     glm::mat4 rp,rProj,rView;
     rView = glm::lookAt(glm::vec3(camera_pos.x, -camera_pos.y, camera_pos.z), glm::vec3(camera_pos.x, -camera_pos.y, camera_pos.z) + glm::vec3(forwardAim.x, -forwardAim.y, forwardAim.z), glm::vec3(0,-1,0));
     rp = projectionMatrix * rView;
